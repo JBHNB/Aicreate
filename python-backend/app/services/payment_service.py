@@ -14,6 +14,18 @@ from app.models.enums import PaymentStatusEnum, ProductTypeEnum
 from app.schemas.payment import PaymentRecordVO
 
 
+def _stripe_field(obj: Any, key: str, default=None):
+    """从 Stripe SDK 对象或 dict 读取字段（StripeObject 无 .get 方法）"""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    try:
+        return obj[key]
+    except (KeyError, TypeError):
+        return getattr(obj, key, default)
+
+
 class PaymentService:
     """支付服务"""
 
@@ -85,11 +97,13 @@ class PaymentService:
 
     async def handle_payment_success(self, session: Any):
         """处理支付成功回调（幂等）"""
-        session_id = getattr(session, "id", None) or session.get("id")
-        metadata = getattr(session, "metadata", None) or session.get("metadata", {})
-        user_id_value = metadata.get("userId")
-        payment_intent = getattr(session, "payment_intent", None) or session.get("payment_intent")
-        payment_intent_id = payment_intent if isinstance(payment_intent, str) else getattr(payment_intent, "id", None)
+        session_id = _stripe_field(session, "id")
+        metadata = _stripe_field(session, "metadata") or {}
+        user_id_value = _stripe_field(metadata, "userId")
+        payment_intent = _stripe_field(session, "payment_intent")
+        payment_intent_id = (
+            payment_intent if isinstance(payment_intent, str) else _stripe_field(payment_intent, "id")
+        )
 
         if not session_id or not user_id_value:
             return

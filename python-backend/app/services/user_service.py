@@ -102,6 +102,17 @@ class UserService:
             "密码错误",
         )
 
+        return self._row_to_login_vo(u)
+
+    async def get_login_user_by_id(self, user_id: int) -> LoginUserVO:
+        """从数据库读取最新登录用户信息（支付升 VIP 后 Session 需刷新）"""
+        stmt = select(T).where(and_(T.c.id == user_id, T.c.isDelete == 0))
+        row = await self.db.fetch_one(stmt)
+        throw_if_not(row, ErrorCode.NOT_FOUND_ERROR, "用户不存在")
+        return self._row_to_login_vo(dict(row))
+
+    @staticmethod
+    def _row_to_login_vo(u: dict) -> LoginUserVO:
         return LoginUserVO.model_validate(
             {
                 "id": u["id"],

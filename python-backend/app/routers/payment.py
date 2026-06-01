@@ -75,6 +75,7 @@ async def stripe_webhook(
         if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
             await service.handle_payment_success(data_object)
         return "success"
-    except Exception:
+    except Exception as exc:
+        print(f"Stripe webhook 处理失败: {exc}")
         return "error"
 

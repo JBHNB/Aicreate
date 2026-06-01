@@ -33,6 +33,11 @@ async def lifespan(app: FastAPI):
         f"dashscope_key={'已配置' if (settings.dashscope_api_key or '').strip() else '未配置'}, "
         f"gemini_key={'已配置' if (settings.nano_banana_api_key or '').strip() else '未配置'}"
     )
+    print(
+        "支付: "
+        f"stripe_key={'已配置' if (settings.stripe_api_key or '').strip() else '未配置'}, "
+        f"webhook={'已配置' if (settings.stripe_webhook_secret or '').strip() and settings.stripe_webhook_secret != 'whsec_xxx' else '未配置'}"
+    )
     yield
     await database.disconnect()
     await close_redis()
