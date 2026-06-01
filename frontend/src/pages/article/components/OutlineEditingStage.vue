@@ -97,7 +97,7 @@
       <div v-else class="vip-upgrade-notice">
         <CrownOutlined class="vip-icon" />
         <p>AI 修改大纲功能仅限 VIP 会员使用</p>
-        <span class="upgrade-btn muted">VIP 功能（支付模块未接入时可联系管理员开通 vip 角色）</span>
+        <RouterLink to="/vip" class="upgrade-btn">升级 VIP 解锁</RouterLink>
       </div>
     </div>
 
@@ -132,6 +132,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { RouterLink } from 'vue-router'
 import { CheckOutlined, DeleteOutlined, PlusOutlined, RobotOutlined, CrownOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import Sortable from 'sortablejs'

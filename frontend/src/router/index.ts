@@ -21,6 +21,11 @@ const router = createRouter({
           component: () => import('@/pages/AboutPage.vue'),
         },
         {
+          path: 'vip',
+          name: 'vip',
+          component: () => import('@/pages/VipPage.vue'),
+        },
+        {
           path: 'admin/userManage',
           name: 'user-manage',
           component: () => import('@/pages/admin/UserManagePage.vue'),

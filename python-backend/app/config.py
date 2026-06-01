@@ -101,8 +101,8 @@ class Settings(BaseSettings):
 
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_success_url: str = "http://localhost:5173/payment/success"
-    stripe_cancel_url: str = "http://localhost:5173/payment/cancel"
+    stripe_success_url: str = "http://localhost:5173/vip?success=true"
+    stripe_cancel_url: str = "http://localhost:5173/vip?cancelled=true"
 
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),

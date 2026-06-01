@@ -100,7 +100,8 @@
                 </a-checkbox-group>
                 <div v-if="!isVip" class="vip-notice">
                   <CrownOutlined />
-                  <span>AI 生图和 SVG 为 VIP/管理员专属（可在库中将 userRole 设为 vip）</span>
+                  <span>AI 生图和 SVG 为 VIP 专属功能，</span>
+                  <RouterLink to="/vip">立即升级</RouterLink>
                 </div>
               </div>
 

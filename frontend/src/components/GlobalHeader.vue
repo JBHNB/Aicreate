@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { CrownOutlined } from '@ant-design/icons-vue'
 
 import { USER_ROLE_ADMIN } from '@/constants/user'
 import request from '@/request'
 import { useLoginUserStore } from '@/stores/loginUser'
+import { isVip as checkIsVip } from '@/utils/permission'
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
+const isVip = computed(() => checkIsVip(loginUserStore.loginUser))
 
 async function handleLogout() {
   try {
@@ -43,6 +47,14 @@ async function handleLogout() {
       </template>
 
       <template v-if="loginUserStore.loginUser">
+        <RouterLink v-if="!isVip" to="/vip" class="upgrade-vip-btn">
+          <CrownOutlined />
+          <span>升级 VIP</span>
+        </RouterLink>
+        <RouterLink v-else to="/vip" class="vip-badge-link">
+          <CrownOutlined />
+          <span>VIP</span>
+        </RouterLink>
         <span class="user-wrap">
           <span class="user-name" :title="loginUserStore.loginUser.userAccount">
             {{ loginUserStore.displayName() }}
@@ -126,5 +138,22 @@ async function handleLogout() {
 .admin-link {
   color: #722ed1;
   font-weight: 500;
+}
+.upgrade-vip-btn,
+.vip-badge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #16a34a;
+  text-decoration: none;
+}
+.upgrade-vip-btn:hover,
+.vip-badge-link:hover {
+  background: rgba(34, 197, 94, 0.08);
+  color: #15803d;
 }
 </style>
