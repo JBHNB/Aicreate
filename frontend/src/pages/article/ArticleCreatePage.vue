@@ -1,8 +1,18 @@
 <template>
-  <div class="article-create-page">
+  <div class="article-create-page" :class="{ 'perf-mode': performanceMode }">
+    <div class="tech-background" aria-hidden="true">
+      <TechParticleCanvas v-if="!performanceMode" class="tech-background__particles" />
+      <div class="tech-background__grid" />
+      <div class="tech-background__glow tech-background__glow--cyan" />
+      <div class="tech-background__glow tech-background__glow--green" />
+      <div class="tech-background__glow tech-background__glow--violet" />
+      <div class="tech-background__scanline" />
+    </div>
+
     <!-- 三栏布局容器 -->
     <div class="create-layout">
       <!-- 左侧：智能体流程可视化 -->
+      <div class="tech-panel-glow">
       <aside class="sidebar-left">
         <div class="sidebar-header">
           <h3 class="sidebar-title">创作流程</h3>
@@ -36,14 +46,17 @@
         </div>
 
       </aside>
+      </div>
 
       <!-- 中间：主内容区 -->
+      <div class="tech-panel-glow tech-panel-glow--main">
       <main ref="mainContentRef" class="main-content">
         <!-- 阶段切换（带过渡动画） -->
         <Transition name="fade-slide" mode="out-in">
           <!-- 输入状态 -->
           <div v-if="currentPhase === 'INPUT'" key="input" class="input-state">
-          <div class="input-card">
+            <div class="tech-panel-glow tech-panel-glow--card">
+              <div class="input-card">
             <div class="input-header">
               <h1 class="input-title">创作新文章</h1>
               <p class="input-subtitle">输入选题，AI 帮你生成爆款文章</p>
@@ -123,7 +136,8 @@
                 <span>配额已用完，无法创建文章</span>
               </div>
             </div>
-          </div>
+              </div>
+            </div>
           </div>
 
           <!-- 标题生成中 -->
@@ -266,8 +280,10 @@
           </div>
         </Transition>
       </main>
+      </div>
 
       <!-- 右侧：辅助面板 -->
+      <div class="tech-panel-glow">
       <aside class="sidebar-right">
         <!-- 配额信息 -->
         <div v-if="currentPhase === 'INPUT'" class="panel-section quota-section">
@@ -531,6 +547,7 @@
           </a>
         </div>
       </aside>
+      </div>
     </div>
 
     <!-- 错误提示 -->
@@ -541,6 +558,17 @@
     >
       <p>{{ errorMessage }}</p>
     </a-modal>
+
+    <!-- 性能模式：关闭粒子等动效 -->
+    <div class="perf-mode-toggle" title="开启后关闭粒子动画，页面更流畅">
+      <ThunderboltOutlined class="perf-mode-icon" />
+      <span class="perf-mode-label">性能模式</span>
+      <a-switch
+        v-model:checked="performanceMode"
+        size="small"
+        @change="onPerformanceModeChange"
+      />
+    </div>
   </div>
 </template>
 
@@ -577,6 +605,27 @@ import type { ArticleVO } from '@/types/article'
 import { marked } from 'marked'
 import TitleSelectingStage from './components/TitleSelectingStage.vue'
 import OutlineEditingStage from './components/OutlineEditingStage.vue'
+import TechParticleCanvas from '@/components/TechParticleCanvas.vue'
+
+const PERF_MODE_STORAGE_KEY = 'aicreate-article-performance-mode'
+
+function readPerformanceMode(): boolean {
+  try {
+    return localStorage.getItem(PERF_MODE_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const performanceMode = ref(readPerformanceMode())
+
+function onPerformanceModeChange(checked: boolean) {
+  try {
+    localStorage.setItem(PERF_MODE_STORAGE_KEY, checked ? '1' : '0')
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -1172,21 +1221,226 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .article-create-page {
+  --tech-glass-bg: rgba(255, 255, 255, 0.94);
+  --tech-glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+
+  position: relative;
   height: calc(100vh - 64px);
-  background: var(--color-background-secondary);
   overflow: hidden;
+  background: #060b14;
+
+  &.perf-mode {
+    .tech-panel-glow,
+    .tech-background__glow {
+      animation: none !important;
+    }
+  }
+}
+
+.perf-mode-toggle {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  user-select: none;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: rgba(56, 189, 248, 0.5);
+  }
+
+  .perf-mode-icon {
+    font-size: 14px;
+    color: #22d3ee;
+  }
+
+  .perf-mode-label {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  :deep(.ant-switch) {
+    background: rgba(255, 255, 255, 0.2);
+
+    &.ant-switch-checked {
+      background: var(--color-primary, #22c55e);
+    }
+  }
+}
+
+.tech-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(34, 197, 94, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 50%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+    linear-gradient(165deg, #030712 0%, #0f172a 42%, #0c1222 68%, #060b14 100%);
+}
+
+.tech-background__particles {
+  z-index: 1;
+}
+
+.tech-background__grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, black 20%, transparent 75%);
+}
+
+.tech-background__glow {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.55;
+  z-index: 0;
+  will-change: transform;
+  animation: tech-float 24s ease-in-out infinite;
+}
+
+.tech-background__glow--cyan {
+  width: 420px;
+  height: 420px;
+  top: -10%;
+  left: 16%;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.35) 0%, transparent 70%);
+}
+
+.tech-background__glow--green {
+  width: 360px;
+  height: 360px;
+  bottom: 2%;
+  right: 10%;
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.28) 0%, transparent 70%);
+  animation-delay: -8s;
+}
+
+.tech-background__glow--violet {
+  width: 300px;
+  height: 300px;
+  top: 32%;
+  right: 26%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, transparent 70%);
+  animation-delay: -16s;
+}
+
+.tech-background__scanline {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(56, 189, 248, 0.012) 3px,
+    rgba(56, 189, 248, 0.012) 4px
+  );
+  opacity: 0.5;
+}
+
+@keyframes tech-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(20px, -16px, 0);
+  }
+}
+
+@keyframes border-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* 流光边框：渐变位移，替代旋转 conic-gradient */
+.tech-panel-glow {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  border-radius: var(--radius-xl);
+  padding: 1px;
+  overflow: hidden;
+  contain: layout style paint;
+  background: linear-gradient(
+    90deg,
+    rgba(34, 211, 238, 0.15),
+    rgba(34, 211, 238, 0.75),
+    rgba(34, 197, 94, 0.75),
+    rgba(129, 140, 248, 0.6),
+    rgba(34, 211, 238, 0.15)
+  );
+  background-size: 200% 100%;
+  animation: border-flow 10s linear infinite;
+
+  > .sidebar-left,
+  > .sidebar-right,
+  > .main-content {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    background: var(--tech-glass-bg);
+    border: none;
+    box-shadow: var(--tech-glass-shadow);
+    border-radius: calc(var(--radius-xl) - 1px);
+  }
+}
+
+.tech-panel-glow--main {
+  animation-duration: 8s;
+}
+
+.tech-panel-glow--card {
+  height: auto;
+  border-radius: var(--radius-xl);
+  padding: 1px;
+  margin: 0 auto;
+  animation-duration: 9s;
+
+  > .input-card {
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.96);
+    border: none;
+    box-shadow: var(--tech-glass-shadow);
+    border-radius: calc(var(--radius-xl) - 1px);
+  }
 }
 
 .create-layout {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 320px 1fr 300px;
   height: 100%;
+  gap: 14px;
+  padding: 14px;
+  box-sizing: border-box;
 }
 
 /* 左侧边栏 */
 .sidebar-left {
-  background: white;
-  border-right: 1px solid var(--color-border);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -1327,7 +1581,6 @@ onBeforeUnmount(() => {
 .main-content {
   padding: 32px 40px;
   overflow-y: auto;
-  background: white;
 }
 
 /* 输入状态 */
@@ -1338,8 +1591,7 @@ onBeforeUnmount(() => {
 }
 
 .input-card {
-  background: var(--color-background-secondary);
-  border-radius: var(--radius-xl);
+  border-radius: calc(var(--radius-xl) - 2px);
   padding: 40px;
 }
 
@@ -1352,7 +1604,10 @@ onBeforeUnmount(() => {
   font-size: 28px;
   font-weight: 700;
   margin: 0 0 8px;
-  color: var(--color-text);
+  background: linear-gradient(135deg, #0f172a 0%, #0369a1 55%, #16a34a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .input-subtitle {
@@ -1733,8 +1988,6 @@ onBeforeUnmount(() => {
 
 /* 右侧辅助面板 */
 .sidebar-right {
-  background: white;
-  border-left: 1px solid var(--color-border);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -2253,15 +2506,27 @@ onBeforeUnmount(() => {
   .create-layout {
     grid-template-columns: 1fr;
     height: auto;
+    padding: 10px;
+    gap: 10px;
   }
 
-  .sidebar-left,
-  .sidebar-right {
+  .tech-panel-glow:not(.tech-panel-glow--main):not(.tech-panel-glow--card) {
     display: none;
+  }
+
+  .tech-panel-glow--main {
+    height: auto;
   }
 
   .main-content {
     padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tech-background__glow,
+  .tech-panel-glow {
+    animation: none !important;
   }
 }
 </style>

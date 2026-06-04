@@ -13,6 +13,7 @@ const router = createRouter({
         {
           path: '',
           name: 'home',
+          meta: { fullBleed: true },
           component: HomePage,
         },
         {
@@ -33,6 +34,7 @@ const router = createRouter({
         {
           path: 'admin/statistics',
           name: 'admin-statistics',
+          meta: { fullBleed: true },
           component: () => import('@/pages/admin/StatisticsPage.vue'),
         },
         {
