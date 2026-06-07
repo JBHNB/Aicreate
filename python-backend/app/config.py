@@ -104,6 +104,17 @@ class Settings(BaseSettings):
     stripe_success_url: str = "http://localhost:5173/vip?success=true"
     stripe_cancel_url: str = "http://localhost:5173/vip?cancelled=true"
 
+    # RAG 系统知识库
+    rag_enabled: bool = True
+    dashscope_embedding_model: str = "text-embedding-v3"
+    rag_top_k: int = 5
+    rag_chunk_size: int = 600
+    rag_chunk_overlap: int = 80
+    rag_min_score: float = 0.35
+    rag_embed_batch_size: int = 10
+    chroma_persist_dir: str = "./data/chroma"
+    knowledge_files_dir: str = "./data/knowledge_files"
+
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),
         # Windows 记事本等保存的 UTF-8 BOM 会导致首项解析异常；utf-8-sig 可去掉 BOM
@@ -137,6 +148,16 @@ class Settings(BaseSettings):
         """passage 模块与官方 article 共用：优先 LLM_MODEL，否则 DASHSCOPE_MODEL"""
         v = (self.llm_model or "").strip()
         return v or self.dashscope_model
+
+    @property
+    def chroma_persist_path(self) -> Path:
+        p = Path(self.chroma_persist_dir)
+        return p if p.is_absolute() else BASE_DIR / p
+
+    @property
+    def knowledge_files_path(self) -> Path:
+        p = Path(self.knowledge_files_dir)
+        return p if p.is_absolute() else BASE_DIR / p
 
 
 settings = Settings()

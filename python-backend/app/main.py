@@ -12,6 +12,7 @@ from app.exceptions import BusinessException, ErrorCode
 from app.routers import (
     article_router,
     health_router,
+    knowledge_router,
     passage_router,
     payment_router,
     statistics_router,
@@ -94,6 +95,7 @@ app.include_router(passage_router, prefix="/api")
 app.include_router(payment_router, prefix="/api")
 app.include_router(webhook_router, prefix="/api")
 app.include_router(statistics_router, prefix="/api")
+app.include_router(knowledge_router, prefix="/api")
 
 
 @app.get("/")

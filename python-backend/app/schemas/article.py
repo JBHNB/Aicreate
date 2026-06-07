@@ -151,6 +151,8 @@ class ArticleState:
         self.full_content: Optional[str] = None
         self.review_passed: Optional[bool] = None
         self.review_score: Optional[int] = None
+        self.retrieved_context: Optional[str] = None
+        self.retrieval_sources: Optional[List[dict]] = None
 
 
 class ArticleConfirmTitleRequest(BaseModel):

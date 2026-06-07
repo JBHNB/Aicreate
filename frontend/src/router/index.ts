@@ -38,6 +38,11 @@ const router = createRouter({
           component: () => import('@/pages/admin/StatisticsPage.vue'),
         },
         {
+          path: 'admin/knowledge',
+          name: 'admin-knowledge',
+          component: () => import('@/pages/admin/KnowledgeManagePage.vue'),
+        },
+        {
           path: 'passage/create',
           name: 'passage-create',
           meta: { requiresAuth: true },

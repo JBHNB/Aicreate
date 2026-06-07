@@ -25,6 +25,7 @@ from app.schemas.article import (
 from app.models.enums import SseMessageTypeEnum, ImageMethodEnum, ArticleStyleEnum
 from app.services.agent_log_service import AgentLogService
 from app.services.image_service_strategy import ImageServiceStrategy
+from app.services.retrieval_service import retrieval_service
 from app.utils.llm_retry import async_retry_llm, parse_json_list, parse_json_object
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ class ArticleAgentService:
             fail_fast=settings.agent_image_fail_fast,
         )
         self.orchestrator = ArticleAgentOrchestrator()
+        self.retrieval_service = retrieval_service
     
     async def execute_phase1_generate_titles(
         self,
@@ -171,12 +173,32 @@ class ArticleAgentService:
             [section.model_dump() for section in state.outline.sections],
             ensure_ascii=False
         )
+
+        reference_section = ""
+        retrieval_hit_count = 0
+        retrieval_sources_log = []
+        if settings.rag_enabled:
+            retrieval = await self.retrieval_service.retrieve_for_article(
+                topic=state.topic or "",
+                main_title=state.title.main_title if state.title else "",
+                sub_title=state.title.sub_title if state.title else "",
+                outline_sections=state.outline.sections if state.outline else None,
+            )
+            reference_section = self.retrieval_service.build_reference_section(retrieval)
+            state.retrieved_context = retrieval.context or None
+            state.retrieval_sources = [
+                item.model_dump(by_alias=True) for item in retrieval.sources
+            ]
+            retrieval_hit_count = retrieval.hit_count
+            retrieval_sources_log = state.retrieval_sources
+
         prompt = (
             PromptConstant.AGENT3_CONTENT_PROMPT
             .replace("{topic}", state.topic or "")
             .replace("{mainTitle}", state.title.main_title)
             .replace("{subTitle}", state.title.sub_title)
             .replace("{outline}", outline_text)
+            .replace("{referenceSection}", reference_section)
         )
         prompt += self._get_style_prompt(state.style)  # 第 5 期新增：风格 Prompt
 
@@ -188,6 +210,8 @@ class ArticleAgentService:
                 "mainTitle": state.title.main_title if state.title else None,
                 "subTitle": state.title.sub_title if state.title else None,
                 "outlineSections": len(state.outline.sections) if state.outline else 0,
+                "retrievalHitCount": retrieval_hit_count,
+                "retrievalSources": retrieval_sources_log,
             },
         ) as log_data:
             content = await self._call_llm_with_streaming(

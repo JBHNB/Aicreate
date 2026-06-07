@@ -43,6 +43,7 @@ async function handleLogout() {
       </template>
       <template v-if="loginUserStore.loginUser?.userRole === USER_ROLE_ADMIN">
         <RouterLink to="/admin/userManage" class="admin-link">用户管理</RouterLink>
+        <RouterLink to="/admin/knowledge" class="admin-link">知识库</RouterLink>
         <RouterLink to="/admin/statistics" class="admin-link">数据分析</RouterLink>
       </template>
 
