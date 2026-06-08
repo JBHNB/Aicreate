@@ -52,3 +52,10 @@ export async function reindexKnowledgeDocument(id: number) {
     `/knowledge/reindex/${id}`,
   )
 }
+
+export async function updateKnowledgeDocumentTitle(id: number, title: string) {
+  return request.post<{ code: number; data?: KnowledgeDocumentVO; message?: string }>(
+    '/knowledge/update/title',
+    { id, title },
+  )
+}

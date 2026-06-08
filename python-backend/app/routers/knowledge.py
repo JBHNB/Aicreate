@@ -9,7 +9,11 @@ from app.database import get_db
 from app.deps import require_admin
 from app.exceptions import ErrorCode, throw_if
 from app.schemas.common import BaseResponse, DeleteRequest
-from app.schemas.knowledge import KnowledgeDocumentVO, KnowledgeQueryRequest
+from app.schemas.knowledge import (
+    KnowledgeDocumentVO,
+    KnowledgeQueryRequest,
+    KnowledgeUpdateTitleRequest,
+)
 from app.schemas.user import LoginUserVO
 from app.services.knowledge_service import KnowledgeService
 
@@ -64,6 +68,18 @@ async def get_knowledge_document(
     document = await service.get_by_id(document_id)
     throw_if(not document, ErrorCode.NOT_FOUND_ERROR, "文档不存在")
     return BaseResponse.success(data=document)
+
+
+@router.post("/update/title", response_model=BaseResponse[KnowledgeDocumentVO])
+async def update_knowledge_document_title(
+    request: KnowledgeUpdateTitleRequest,
+    db: Database = Depends(get_db),
+    _: LoginUserVO = Depends(require_admin),
+):
+    """重命名知识库文档标题"""
+    service = KnowledgeService(db)
+    document = await service.update_title(request.id, request.title)
+    return BaseResponse.success(data=document, message="标题已更新")
 
 
 @router.post("/delete", response_model=BaseResponse[bool])

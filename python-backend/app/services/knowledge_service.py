@@ -134,6 +134,31 @@ class KnowledgeService:
         )
         return self._to_vo(row) if row else None
 
+    async def update_title(self, document_id: int, title: str) -> KnowledgeDocumentVO:
+        """重命名文档（仅更新 MySQL 标题，不影响向量索引内容）"""
+        normalized = (title or "").strip()
+        throw_if(not normalized, ErrorCode.PARAMS_ERROR, "标题不能为空")
+        throw_if(len(normalized) > 200, ErrorCode.PARAMS_ERROR, "标题不能超过 200 字")
+
+        row = await self.db.fetch_one(
+            "SELECT id FROM knowledge_document WHERE id = :id AND isDelete = 0",
+            {"id": document_id},
+        )
+        throw_if_not(row, ErrorCode.NOT_FOUND_ERROR, "文档不存在")
+
+        await self.db.execute(
+            """
+            UPDATE knowledge_document
+            SET title = :title, updateTime = NOW()
+            WHERE id = :id AND isDelete = 0
+            """,
+            {"id": document_id, "title": normalized},
+        )
+
+        document = await self.get_by_id(document_id)
+        throw_if_not(document, ErrorCode.SYSTEM_ERROR, "更新后查询失败")
+        return document
+
     async def delete_document(self, document_id: int) -> bool:
         row = await self.db.fetch_one(
             "SELECT id FROM knowledge_document WHERE id = :id AND isDelete = 0",

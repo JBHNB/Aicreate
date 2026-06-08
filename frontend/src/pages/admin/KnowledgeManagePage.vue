@@ -7,12 +7,17 @@ import {
   deleteKnowledgeDocument,
   listKnowledgeDocuments,
   reindexKnowledgeDocument,
+  updateKnowledgeDocumentTitle,
   uploadKnowledgeDocument,
   type KnowledgeDocumentVO,
 } from '@/api/knowledge'
 
 const loading = ref(false)
 const uploading = ref(false)
+const renameOpen = ref(false)
+const renameSaving = ref(false)
+const renameTitle = ref('')
+const renamingRecord = ref<KnowledgeDocumentVO | null>(null)
 const dataSource = ref<KnowledgeDocumentVO[]>([])
 const uploadTitle = ref('')
 const selectedFile = ref<File | null>(null)
@@ -35,7 +40,7 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '分块数', dataIndex: 'chunkCount', key: 'chunkCount', width: 90 },
   { title: '上传时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
-  { title: '操作', key: 'action', width: 160 },
+  { title: '操作', key: 'action', width: 220 },
 ]
 
 function formatSize(size: number) {
@@ -114,6 +119,41 @@ async function handleReindex(record: KnowledgeDocumentVO) {
   }
 }
 
+function openRenameModal(record: KnowledgeDocumentVO) {
+  renamingRecord.value = record
+  renameTitle.value = record.title
+  renameOpen.value = true
+}
+
+function closeRenameModal() {
+  renameOpen.value = false
+  renamingRecord.value = null
+  renameTitle.value = ''
+}
+
+async function handleRenameSubmit() {
+  const title = renameTitle.value.trim()
+  if (!title) {
+    message.warning('请输入标题')
+    return
+  }
+  if (!renamingRecord.value) return
+
+  renameSaving.value = true
+  try {
+    const { data } = await updateKnowledgeDocumentTitle(renamingRecord.value.id, title)
+    if (data.code === 0) {
+      message.success('标题已更新')
+      closeRenameModal()
+      await fetchData()
+    } else {
+      message.error(data.message ?? '更新失败')
+    }
+  } finally {
+    renameSaving.value = false
+  }
+}
+
 function handleTableChange(...args: unknown[]) {
   const pag = args[0] as { current?: number; pageSize?: number }
   void fetchData(pag?.current ?? 1, pag?.pageSize ?? 10)
@@ -171,6 +211,9 @@ onMounted(() => {
         </template>
         <template v-else-if="column.key === 'action'">
           <a-space>
+            <a-button type="link" size="small" @click="openRenameModal(record)">
+              重命名
+            </a-button>
             <a-button
               v-if="record.status === 'failed'"
               type="link"
@@ -186,6 +229,24 @@ onMounted(() => {
         </template>
       </template>
     </a-table>
+
+    <a-modal
+      v-model:open="renameOpen"
+      title="重命名文档"
+      ok-text="保存"
+      cancel-text="取消"
+      :confirm-loading="renameSaving"
+      @ok="handleRenameSubmit"
+      @cancel="closeRenameModal"
+    >
+      <a-input
+        v-model:value="renameTitle"
+        placeholder="请输入新标题"
+        :maxlength="200"
+        show-count
+        @press-enter="handleRenameSubmit"
+      />
+    </a-modal>
   </div>
 </template>
 
