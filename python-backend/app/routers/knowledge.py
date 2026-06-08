@@ -1,6 +1,6 @@
 """系统知识库路由（管理员）"""
 
-from typing import Optional
+from typing import List, Optional
 
 from databases import Database
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -13,6 +13,7 @@ from app.schemas.knowledge import (
     KnowledgeDocumentVO,
     KnowledgeQueryRequest,
     KnowledgeUpdateTitleRequest,
+    KnowledgeSearchByStatusRequest,
 )
 from app.schemas.user import LoginUserVO
 from app.services.knowledge_service import KnowledgeService
@@ -81,6 +82,15 @@ async def update_knowledge_document_title(
     document = await service.update_title(request.id, request.title)
     return BaseResponse.success(data=document, message="标题已更新")
 
+@router.post("/search/status", response_model=BaseResponse[List[KnowledgeDocumentVO]])
+async def search_knowledge_documents_by_status(    request: KnowledgeSearchByStatusRequest,
+    db: Database = Depends(get_db),
+    _: LoginUserVO = Depends(require_admin),
+):
+    """根据状态搜索知识库文档"""
+    service = KnowledgeService(db)
+    documents = await service.search_by_status(request)
+    return BaseResponse.success(data=documents, message="搜索成功")
 
 @router.post("/delete", response_model=BaseResponse[bool])
 async def delete_knowledge_document(

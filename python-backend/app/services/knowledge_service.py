@@ -7,7 +7,11 @@ from typing import List, Optional, Tuple
 from databases import Database
 
 from app.exceptions import ErrorCode, throw_if, throw_if_not
-from app.schemas.knowledge import KnowledgeDocumentVO, KnowledgeQueryRequest
+from app.schemas.knowledge import (
+    KnowledgeDocumentVO,
+    KnowledgeQueryRequest,
+    KnowledgeSearchByStatusRequest,
+)
 from app.services.knowledge_ingest_service import KnowledgeIngestService
 from app.utils.document_parser import extension_to_file_type, is_allowed_knowledge_file
 
@@ -158,6 +162,26 @@ class KnowledgeService:
         document = await self.get_by_id(document_id)
         throw_if_not(document, ErrorCode.SYSTEM_ERROR, "更新后查询失败")
         return document
+
+    async def search_by_status(
+        self, request: KnowledgeSearchByStatusRequest
+    ) -> List[KnowledgeDocumentVO]:
+        """根据状态查询知识库文档（不分页，返回全部匹配项）"""
+        status = (request.status or "").strip()
+        throw_if(not status, ErrorCode.PARAMS_ERROR, "状态不能为空")
+
+        rows = await self.db.fetch_all(
+            """
+            SELECT id, title, fileName, fileType, fileSize, status, chunkCount,
+                   errorMessage, createdBy, createTime, updateTime
+            FROM knowledge_document
+            WHERE status = :status AND isDelete = 0
+            ORDER BY createTime DESC
+            """,
+            {"status": status},
+        )
+        # 没有匹配记录时返回空列表即可，不是错误
+        return [self._to_vo(row) for row in rows]
 
     async def delete_document(self, document_id: int) -> bool:
         row = await self.db.fetch_one(

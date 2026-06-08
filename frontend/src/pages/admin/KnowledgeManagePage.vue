@@ -21,6 +21,7 @@ const renamingRecord = ref<KnowledgeDocumentVO | null>(null)
 const dataSource = ref<KnowledgeDocumentVO[]>([])
 const uploadTitle = ref('')
 const selectedFile = ref<File | null>(null)
+const statusFilter = ref<string>('')
 const pagination = reactive({
   current: 1,
   pageSize: 10,
@@ -52,7 +53,11 @@ function formatSize(size: number) {
 async function fetchData(page = pagination.current, pageSize = pagination.pageSize) {
   loading.value = true
   try {
-    const { data } = await listKnowledgeDocuments(page, pageSize)
+    const { data } = await listKnowledgeDocuments(
+      page,
+      pageSize,
+      statusFilter.value || undefined,
+    )
     if (data.code === 0 && data.data) {
       dataSource.value = data.data.records ?? []
       pagination.total = data.data.total ?? 0
@@ -154,6 +159,11 @@ async function handleRenameSubmit() {
   }
 }
 
+function handleStatusFilterChange() {
+  pagination.current = 1
+  void fetchData(1, pagination.pageSize)
+}
+
 function handleTableChange(...args: unknown[]) {
   const pag = args[0] as { current?: number; pageSize?: number }
   void fetchData(pag?.current ?? 1, pag?.pageSize ?? 10)
@@ -184,6 +194,24 @@ onMounted(() => {
         <a-button type="primary" :loading="uploading" @click="handleUpload">上传并建立索引</a-button>
       </a-space>
     </a-card>
+
+    <div class="filter-bar">
+      <a-space>
+        <span class="filter-label">状态筛选</span>
+        <a-select
+          v-model:value="statusFilter"
+          placeholder="全部状态"
+          style="width: 130px"
+          allow-clear
+          @change="handleStatusFilterChange"
+        >
+          <a-select-option value="">全部</a-select-option>
+          <a-select-option value="processing">处理中</a-select-option>
+          <a-select-option value="ready">已就绪</a-select-option>
+          <a-select-option value="failed">失败</a-select-option>
+        </a-select>
+      </a-space>
+    </div>
 
     <a-table
       row-key="id"
@@ -257,6 +285,14 @@ onMounted(() => {
 
 .upload-card {
   margin-bottom: 24px;
+}
+
+.filter-bar {
+  margin-bottom: 16px;
+}
+
+.filter-label {
+  color: rgba(0, 0, 0, 0.65);
 }
 
 .doc-table {

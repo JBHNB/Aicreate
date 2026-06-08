@@ -27,7 +27,11 @@ export async function uploadKnowledgeDocument(file: File, title?: string) {
   )
 }
 
-export async function listKnowledgeDocuments(current = 1, pageSize = 10) {
+export async function listKnowledgeDocuments(
+  current = 1,
+  pageSize = 10,
+  status?: string,
+) {
   return request.post<{
     code: number
     data?: {
@@ -37,7 +41,11 @@ export async function listKnowledgeDocuments(current = 1, pageSize = 10) {
       size: number
     }
     message?: string
-  }>('/knowledge/list/page', { current, pageSize })
+  }>('/knowledge/list/page', {
+    current,
+    pageSize,
+    ...(status ? { status } : {}),
+  })
 }
 
 export async function deleteKnowledgeDocument(id: number) {
@@ -57,5 +65,12 @@ export async function updateKnowledgeDocumentTitle(id: number, title: string) {
   return request.post<{ code: number; data?: KnowledgeDocumentVO; message?: string }>(
     '/knowledge/update/title',
     { id, title },
+  )
+}
+
+export async function searchKnowledgeDocumentsByStatus(status: string) {
+  return request.post<{ code: number; data?: KnowledgeDocumentVO[]; message?: string }>(
+    '/knowledge/search/status',
+    { status },
   )
 }

@@ -40,6 +40,13 @@ class KnowledgeUpdateTitleRequest(BaseModel):
     id: int = Field(..., description="文档 ID")
     title: str = Field(..., min_length=1, max_length=200, description="新标题")
 
+class KnowledgeSearchByStatusRequest(BaseModel):
+    """按状态查询知识库文档（不分页）"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: str = Field(..., description="状态：processing / ready / failed")
+
 
 class RetrievalSourceVO(BaseModel):
     """检索命中来源"""
