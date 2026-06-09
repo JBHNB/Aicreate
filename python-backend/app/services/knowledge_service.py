@@ -8,11 +8,15 @@ from databases import Database
 
 from app.exceptions import ErrorCode, throw_if, throw_if_not
 from app.schemas.knowledge import (
+    KnowledgeChunkVO,
     KnowledgeDocumentVO,
     KnowledgeQueryRequest,
     KnowledgeSearchByStatusRequest,
+    KnowledgeSearchByTitleRequest,
+    KnowledgeStatsVO,
 )
 from app.services.knowledge_ingest_service import KnowledgeIngestService
+from app.managers.chroma_manager import chroma_manager
 from app.utils.document_parser import extension_to_file_type, is_allowed_knowledge_file
 
 logger = logging.getLogger(__name__)
@@ -182,6 +186,61 @@ class KnowledgeService:
         )
         # 没有匹配记录时返回空列表即可，不是错误
         return [self._to_vo(row) for row in rows]
+
+    async def search_by_title(
+        self, request: KnowledgeSearchByTitleRequest
+    ) -> List[KnowledgeDocumentVO]:
+        """根据标题关键词查询知识库文档（不分页，模糊匹配）"""
+        title = (request.title or "").strip()
+        throw_if(not title, ErrorCode.PARAMS_ERROR, "标题关键词不能为空")
+
+        rows = await self.db.fetch_all(
+            """
+            SELECT id, title, fileName, fileType, fileSize, status, chunkCount,
+                   errorMessage, createdBy, createTime, updateTime
+            FROM knowledge_document
+            WHERE title LIKE :title AND isDelete = 0
+            ORDER BY createTime DESC
+            """,
+            {"title": f"%{title}%"},
+        )
+        return [self._to_vo(row) for row in rows]
+
+    async def get_stats(self) -> KnowledgeStatsVO:
+        """统计各状态文档数量"""
+        row = await self.db.fetch_one(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) AS ready_count,
+                SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing_count,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+            FROM knowledge_document
+            WHERE isDelete = 0
+            """
+        )
+        data = dict(row or {})
+        return KnowledgeStatsVO(
+            total=int(data.get("total") or 0),
+            readyCount=int(data.get("ready_count") or 0),
+            processingCount=int(data.get("processing_count") or 0),
+            failedCount=int(data.get("failed_count") or 0),
+        )
+
+    async def list_chunks(self, document_id: int) -> List[KnowledgeChunkVO]:
+        """查看文档在向量库中的分块内容"""
+        document = await self.get_by_id(document_id)
+        throw_if_not(document, ErrorCode.NOT_FOUND_ERROR, "文档不存在")
+
+        raw_chunks = chroma_manager().list_document_chunks(document_id)
+        return [
+            KnowledgeChunkVO(
+                chunkIndex=item["chunk_index"],
+                content=item["content"],
+                title=item["title"] or document.title,
+            )
+            for item in raw_chunks
+        ]
 
     async def delete_document(self, document_id: int) -> bool:
         row = await self.db.fetch_one(

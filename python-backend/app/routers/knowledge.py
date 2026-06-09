@@ -10,10 +10,13 @@ from app.deps import require_admin
 from app.exceptions import ErrorCode, throw_if
 from app.schemas.common import BaseResponse, DeleteRequest
 from app.schemas.knowledge import (
+    KnowledgeChunkVO,
     KnowledgeDocumentVO,
     KnowledgeQueryRequest,
     KnowledgeUpdateTitleRequest,
     KnowledgeSearchByStatusRequest,
+    KnowledgeSearchByTitleRequest,
+    KnowledgeStatsVO,
 )
 from app.schemas.user import LoginUserVO
 from app.services.knowledge_service import KnowledgeService
@@ -59,6 +62,53 @@ async def list_knowledge_documents(
     )
 
 
+@router.get("/stats", response_model=BaseResponse[KnowledgeStatsVO])
+async def get_knowledge_stats(
+    db: Database = Depends(get_db),
+    _: LoginUserVO = Depends(require_admin),
+):
+    """知识库统计概览（各状态文档数量）"""
+    service = KnowledgeService(db)
+    stats = await service.get_stats()
+    return BaseResponse.success(data=stats)
+
+
+@router.post("/search/title", response_model=BaseResponse[List[KnowledgeDocumentVO]])
+async def search_knowledge_documents_by_title(
+    request: KnowledgeSearchByTitleRequest,
+    db: Database = Depends(get_db),
+    _: LoginUserVO = Depends(require_admin),
+):
+    """根据标题关键词搜索知识库文档（不分页）"""
+    service = KnowledgeService(db)
+    documents = await service.search_by_title(request)
+    return BaseResponse.success(data=documents, message="搜索成功")
+
+
+@router.post("/search/status", response_model=BaseResponse[List[KnowledgeDocumentVO]])
+async def search_knowledge_documents_by_status(
+    request: KnowledgeSearchByStatusRequest,
+    db: Database = Depends(get_db),
+    _: LoginUserVO = Depends(require_admin),
+):
+    """根据状态搜索知识库文档"""
+    service = KnowledgeService(db)
+    documents = await service.search_by_status(request)
+    return BaseResponse.success(data=documents, message="搜索成功")
+
+
+@router.get("/{document_id}/chunks", response_model=BaseResponse[List[KnowledgeChunkVO]])
+async def list_knowledge_document_chunks(
+    document_id: int,
+    db: Database = Depends(get_db),
+    _: LoginUserVO = Depends(require_admin),
+):
+    """查看文档分块内容（向量库中的切片预览）"""
+    service = KnowledgeService(db)
+    chunks = await service.list_chunks(document_id)
+    return BaseResponse.success(data=chunks)
+
+
 @router.get("/{document_id}", response_model=BaseResponse[KnowledgeDocumentVO])
 async def get_knowledge_document(
     document_id: int,
@@ -82,15 +132,6 @@ async def update_knowledge_document_title(
     document = await service.update_title(request.id, request.title)
     return BaseResponse.success(data=document, message="标题已更新")
 
-@router.post("/search/status", response_model=BaseResponse[List[KnowledgeDocumentVO]])
-async def search_knowledge_documents_by_status(    request: KnowledgeSearchByStatusRequest,
-    db: Database = Depends(get_db),
-    _: LoginUserVO = Depends(require_admin),
-):
-    """根据状态搜索知识库文档"""
-    service = KnowledgeService(db)
-    documents = await service.search_by_status(request)
-    return BaseResponse.success(data=documents, message="搜索成功")
 
 @router.post("/delete", response_model=BaseResponse[bool])
 async def delete_knowledge_document(

@@ -60,6 +60,27 @@ class ChromaManager:
     def delete_document(self, document_id: int) -> None:
         self._collection.delete(where={"document_id": document_id})
 
+    def list_document_chunks(self, document_id: int) -> List[Dict[str, Any]]:
+        result = self._collection.get(
+            where={"document_id": document_id},
+            include=["documents", "metadatas"],
+        )
+        ids = result.get("ids") or []
+        documents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+        chunks: List[Dict[str, Any]] = []
+        for index, _chunk_id in enumerate(ids):
+            metadata = metadatas[index] if index < len(metadatas) else {}
+            chunks.append(
+                {
+                    "chunk_index": int(metadata.get("chunk_index", index)),
+                    "content": documents[index] if index < len(documents) else "",
+                    "title": str(metadata.get("title") or ""),
+                }
+            )
+        chunks.sort(key=lambda item: item["chunk_index"])
+        return chunks
+
     def query(
         self,
         query_embedding: List[float],

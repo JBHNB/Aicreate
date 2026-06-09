@@ -5,11 +5,15 @@ import type { UploadProps } from 'ant-design-vue'
 
 import {
   deleteKnowledgeDocument,
+  getKnowledgeStats,
+  listKnowledgeDocumentChunks,
   listKnowledgeDocuments,
   reindexKnowledgeDocument,
   updateKnowledgeDocumentTitle,
   uploadKnowledgeDocument,
+  type KnowledgeChunkVO,
   type KnowledgeDocumentVO,
+  type KnowledgeStatsVO,
 } from '@/api/knowledge'
 
 const loading = ref(false)
@@ -18,10 +22,16 @@ const renameOpen = ref(false)
 const renameSaving = ref(false)
 const renameTitle = ref('')
 const renamingRecord = ref<KnowledgeDocumentVO | null>(null)
+const chunksOpen = ref(false)
+const chunksLoading = ref(false)
+const chunkList = ref<KnowledgeChunkVO[]>([])
+const chunkPreviewTitle = ref('')
+const stats = ref<KnowledgeStatsVO | null>(null)
 const dataSource = ref<KnowledgeDocumentVO[]>([])
 const uploadTitle = ref('')
 const selectedFile = ref<File | null>(null)
 const statusFilter = ref<string>('')
+const titleFilter = ref('')
 const pagination = reactive({
   current: 1,
   pageSize: 10,
@@ -41,8 +51,15 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '分块数', dataIndex: 'chunkCount', key: 'chunkCount', width: 90 },
   { title: '上传时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
-  { title: '操作', key: 'action', width: 220 },
+  { title: '操作', key: 'action', width: 280 },
 ]
+
+async function fetchStats() {
+  const { data } = await getKnowledgeStats()
+  if (data.code === 0 && data.data) {
+    stats.value = data.data
+  }
+}
 
 function formatSize(size: number) {
   if (size < 1024) return `${size} B`
@@ -53,11 +70,10 @@ function formatSize(size: number) {
 async function fetchData(page = pagination.current, pageSize = pagination.pageSize) {
   loading.value = true
   try {
-    const { data } = await listKnowledgeDocuments(
-      page,
-      pageSize,
-      statusFilter.value || undefined,
-    )
+    const { data } = await listKnowledgeDocuments(page, pageSize, {
+      status: statusFilter.value || undefined,
+      title: titleFilter.value.trim() || undefined,
+    })
     if (data.code === 0 && data.data) {
       dataSource.value = data.data.records ?? []
       pagination.total = data.data.total ?? 0
@@ -96,6 +112,7 @@ async function handleUpload() {
       uploadTitle.value = ''
       selectedFile.value = null
       await fetchData(1, pagination.pageSize)
+      await fetchStats()
     } else {
       message.error(data.message ?? '上传失败')
     }
@@ -109,6 +126,7 @@ async function handleDelete(record: KnowledgeDocumentVO) {
   if (data.code === 0) {
     message.success('已删除')
     await fetchData()
+    await fetchStats()
   } else {
     message.error(data.message ?? '删除失败')
   }
@@ -164,12 +182,41 @@ function handleStatusFilterChange() {
   void fetchData(1, pagination.pageSize)
 }
 
+function handleTitleSearch() {
+  pagination.current = 1
+  void fetchData(1, pagination.pageSize)
+}
+
+async function openChunksModal(record: KnowledgeDocumentVO) {
+  chunkPreviewTitle.value = record.title
+  chunkList.value = []
+  chunksOpen.value = true
+  chunksLoading.value = true
+  try {
+    const { data } = await listKnowledgeDocumentChunks(record.id)
+    if (data.code === 0) {
+      chunkList.value = data.data ?? []
+    } else {
+      message.error(data.message ?? '加载分块失败')
+    }
+  } finally {
+    chunksLoading.value = false
+  }
+}
+
+function closeChunksModal() {
+  chunksOpen.value = false
+  chunkList.value = []
+  chunkPreviewTitle.value = ''
+}
+
 function handleTableChange(...args: unknown[]) {
   const pag = args[0] as { current?: number; pageSize?: number }
   void fetchData(pag?.current ?? 1, pag?.pageSize ?? 10)
 }
 
 onMounted(() => {
+  void fetchStats()
   void fetchData()
 })
 </script>
@@ -180,6 +227,21 @@ onMounted(() => {
     <a-typography-paragraph type="secondary">
       管理员上传参考资料后，阶段3生成正文时会自动检索并注入相关内容（RAG）。
     </a-typography-paragraph>
+
+    <a-row v-if="stats" :gutter="16" class="stats-row">
+      <a-col :span="6">
+        <a-statistic title="文档总数" :value="stats.total" />
+      </a-col>
+      <a-col :span="6">
+        <a-statistic title="已就绪" :value="stats.readyCount" value-style="color: #52c41a" />
+      </a-col>
+      <a-col :span="6">
+        <a-statistic title="处理中" :value="stats.processingCount" value-style="color: #1677ff" />
+      </a-col>
+      <a-col :span="6">
+        <a-statistic title="失败" :value="stats.failedCount" value-style="color: #ff4d4f" />
+      </a-col>
+    </a-row>
 
     <a-card title="上传文档" class="upload-card">
       <a-space direction="vertical" style="width: 100%">
@@ -196,7 +258,14 @@ onMounted(() => {
     </a-card>
 
     <div class="filter-bar">
-      <a-space>
+      <a-space wrap>
+        <a-input-search
+          v-model:value="titleFilter"
+          placeholder="搜索标题"
+          style="width: 220px"
+          allow-clear
+          @search="handleTitleSearch"
+        />
         <span class="filter-label">状态筛选</span>
         <a-select
           v-model:value="statusFilter"
@@ -210,6 +279,7 @@ onMounted(() => {
           <a-select-option value="ready">已就绪</a-select-option>
           <a-select-option value="failed">失败</a-select-option>
         </a-select>
+        <a-button @click="handleTitleSearch">查询</a-button>
       </a-space>
     </div>
 
@@ -230,7 +300,12 @@ onMounted(() => {
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
-          <a-tag :color="statusMap[record.status]?.color ?? 'default'">
+          <a-tooltip v-if="record.status === 'failed' && record.errorMessage" :title="record.errorMessage">
+            <a-tag :color="statusMap[record.status]?.color ?? 'default'">
+              {{ statusMap[record.status]?.text ?? record.status }}
+            </a-tag>
+          </a-tooltip>
+          <a-tag v-else :color="statusMap[record.status]?.color ?? 'default'">
             {{ statusMap[record.status]?.text ?? record.status }}
           </a-tag>
         </template>
@@ -239,6 +314,14 @@ onMounted(() => {
         </template>
         <template v-else-if="column.key === 'action'">
           <a-space>
+            <a-button
+              v-if="record.status === 'ready' && record.chunkCount > 0"
+              type="link"
+              size="small"
+              @click="openChunksModal(record)"
+            >
+              查看分块
+            </a-button>
             <a-button type="link" size="small" @click="openRenameModal(record)">
               重命名
             </a-button>
@@ -275,12 +358,37 @@ onMounted(() => {
         @press-enter="handleRenameSubmit"
       />
     </a-modal>
+
+    <a-modal
+      v-model:open="chunksOpen"
+      :title="`分块预览：${chunkPreviewTitle}`"
+      width="720px"
+      :footer="null"
+      @cancel="closeChunksModal"
+    >
+      <a-spin :spinning="chunksLoading">
+        <a-empty v-if="!chunksLoading && chunkList.length === 0" description="暂无分块数据" />
+        <a-collapse v-else>
+          <a-collapse-panel
+            v-for="chunk in chunkList"
+            :key="chunk.chunkIndex"
+            :header="`分块 #${chunk.chunkIndex + 1}`"
+          >
+            <pre class="chunk-content">{{ chunk.content }}</pre>
+          </a-collapse-panel>
+        </a-collapse>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
 <style scoped>
 .knowledge-page {
   max-width: 1100px;
+}
+
+.stats-row {
+  margin-bottom: 24px;
 }
 
 .upload-card {
@@ -297,5 +405,14 @@ onMounted(() => {
 
 .doc-table {
   margin-top: 8px;
+}
+
+.chunk-content {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
 }
 </style>

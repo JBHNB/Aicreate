@@ -14,6 +14,19 @@ export interface KnowledgeDocumentVO {
   updateTime: string
 }
 
+export interface KnowledgeStatsVO {
+  total: number
+  readyCount: number
+  processingCount: number
+  failedCount: number
+}
+
+export interface KnowledgeChunkVO {
+  chunkIndex: number
+  content: string
+  title: string
+}
+
 export async function uploadKnowledgeDocument(file: File, title?: string) {
   const formData = new FormData()
   formData.append('file', file)
@@ -30,7 +43,7 @@ export async function uploadKnowledgeDocument(file: File, title?: string) {
 export async function listKnowledgeDocuments(
   current = 1,
   pageSize = 10,
-  status?: string,
+  options?: { status?: string; title?: string },
 ) {
   return request.post<{
     code: number
@@ -44,8 +57,15 @@ export async function listKnowledgeDocuments(
   }>('/knowledge/list/page', {
     current,
     pageSize,
-    ...(status ? { status } : {}),
+    ...(options?.status ? { status: options.status } : {}),
+    ...(options?.title ? { title: options.title } : {}),
   })
+}
+
+export async function getKnowledgeStats() {
+  return request.get<{ code: number; data?: KnowledgeStatsVO; message?: string }>(
+    '/knowledge/stats',
+  )
 }
 
 export async function deleteKnowledgeDocument(id: number) {
@@ -72,5 +92,18 @@ export async function searchKnowledgeDocumentsByStatus(status: string) {
   return request.post<{ code: number; data?: KnowledgeDocumentVO[]; message?: string }>(
     '/knowledge/search/status',
     { status },
+  )
+}
+
+export async function searchKnowledgeDocumentsByTitle(title: string) {
+  return request.post<{ code: number; data?: KnowledgeDocumentVO[]; message?: string }>(
+    '/knowledge/search/title',
+    { title },
+  )
+}
+
+export async function listKnowledgeDocumentChunks(documentId: number) {
+  return request.get<{ code: number; data?: KnowledgeChunkVO[]; message?: string }>(
+    `/knowledge/${documentId}/chunks`,
   )
 }

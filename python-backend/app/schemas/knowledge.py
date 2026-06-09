@@ -48,6 +48,35 @@ class KnowledgeSearchByStatusRequest(BaseModel):
     status: str = Field(..., description="状态：processing / ready / failed")
 
 
+class KnowledgeSearchByTitleRequest(BaseModel):
+    """按标题关键词查询知识库文档（不分页）"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(..., min_length=1, max_length=200, description="标题关键词（模糊匹配）")
+
+
+class KnowledgeStatsVO(BaseModel):
+    """知识库统计概览"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int = Field(..., description="文档总数")
+    ready_count: int = Field(..., alias="readyCount", description="已就绪数量")
+    processing_count: int = Field(..., alias="processingCount", description="处理中数量")
+    failed_count: int = Field(..., alias="failedCount", description="失败数量")
+
+
+class KnowledgeChunkVO(BaseModel):
+    """文档分块预览"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    chunk_index: int = Field(..., alias="chunkIndex")
+    content: str
+    title: str
+
+
 class RetrievalSourceVO(BaseModel):
     """检索命中来源"""
 
