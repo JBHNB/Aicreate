@@ -36,7 +36,10 @@ export async function uploadKnowledgeDocument(file: File, title?: string) {
   return request.post<{ code: number; data?: KnowledgeDocumentVO; message?: string }>(
     '/knowledge/upload',
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120_000,
+    },
   )
 }
 
@@ -105,5 +108,12 @@ export async function searchKnowledgeDocumentsByTitle(title: string) {
 export async function listKnowledgeDocumentChunks(documentId: number) {
   return request.get<{ code: number; data?: KnowledgeChunkVO[]; message?: string }>(
     `/knowledge/${documentId}/chunks`,
+  )
+}
+
+export async function batchDeleteKnowledgeDocuments(ids: number[]) {
+  return request.post<{ code: number; data?: boolean; message?: string }>(
+    '/knowledge/batch/delete',
+    { ids },
   )
 }

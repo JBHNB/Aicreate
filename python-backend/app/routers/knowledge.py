@@ -17,6 +17,7 @@ from app.schemas.knowledge import (
     KnowledgeSearchByStatusRequest,
     KnowledgeSearchByTitleRequest,
     KnowledgeStatsVO,
+    KnowledgeBatchDeleteRequest,
 )
 from app.schemas.user import LoginUserVO
 from app.services.knowledge_service import KnowledgeService
@@ -131,6 +132,18 @@ async def update_knowledge_document_title(
     service = KnowledgeService(db)
     document = await service.update_title(request.id, request.title)
     return BaseResponse.success(data=document, message="标题已更新")
+
+
+@router.post("/batch/delete", response_model=BaseResponse[bool])
+async def batch_delete_knowledge_documents(
+    request: KnowledgeBatchDeleteRequest,
+    db: Database = Depends(get_db),
+    _: LoginUserVO = Depends(require_admin),
+):
+    """批量删除知识库文档"""
+    service = KnowledgeService(db)
+    result = await service.batch_delete_documents(request)
+    return BaseResponse.success(data=result, message="删除成功")
 
 
 @router.post("/delete", response_model=BaseResponse[bool])

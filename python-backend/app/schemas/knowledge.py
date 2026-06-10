@@ -76,6 +76,11 @@ class KnowledgeChunkVO(BaseModel):
     content: str
     title: str
 
+class KnowledgeBatchDeleteRequest(BaseModel):
+    """批量删除知识库文档"""
+
+    ids: List[int] = Field(..., min_length=1, max_length=100, description="要删除的文档 ID 列表")
+
 
 class RetrievalSourceVO(BaseModel):
     """检索命中来源"""

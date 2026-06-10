@@ -4,6 +4,7 @@ import { message } from 'ant-design-vue'
 import type { UploadProps } from 'ant-design-vue'
 
 import {
+  batchDeleteKnowledgeDocuments,
   deleteKnowledgeDocument,
   getKnowledgeStats,
   listKnowledgeDocumentChunks,
@@ -17,6 +18,7 @@ import {
 } from '@/api/knowledge'
 
 const loading = ref(false)
+const batchDeleting = ref(false)
 const uploading = ref(false)
 const renameOpen = ref(false)
 const renameSaving = ref(false)
@@ -32,6 +34,7 @@ const uploadTitle = ref('')
 const selectedFile = ref<File | null>(null)
 const statusFilter = ref<string>('')
 const titleFilter = ref('')
+const selectedRowKeys = ref<number[]>([])
 const pagination = reactive({
   current: 1,
   pageSize: 10,
@@ -100,6 +103,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
 }
 
 async function handleUpload() {
+  if (uploading.value) return
   if (!selectedFile.value) {
     message.warning('请先选择文件')
     return
@@ -115,6 +119,7 @@ async function handleUpload() {
       await fetchStats()
     } else {
       message.error(data.message ?? '上传失败')
+      await fetchData()
     }
   } finally {
     uploading.value = false
@@ -125,11 +130,38 @@ async function handleDelete(record: KnowledgeDocumentVO) {
   const { data } = await deleteKnowledgeDocument(record.id)
   if (data.code === 0) {
     message.success('已删除')
+    selectedRowKeys.value = selectedRowKeys.value.filter((id) => id !== record.id)
     await fetchData()
     await fetchStats()
   } else {
     message.error(data.message ?? '删除失败')
   }
+}
+
+async function handleBatchDelete() {
+  if (selectedRowKeys.value.length === 0) {
+    message.warning('请先选择要删除的文档')
+    return
+  }
+
+  batchDeleting.value = true
+  try {
+    const { data } = await batchDeleteKnowledgeDocuments(selectedRowKeys.value)
+    if (data.code === 0) {
+      message.success(`已删除 ${selectedRowKeys.value.length} 个文档`)
+      selectedRowKeys.value = []
+      await fetchData()
+      await fetchStats()
+    } else {
+      message.error(data.message ?? '批量删除失败')
+    }
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+function handleRowSelectionChange(keys: (string | number)[]) {
+  selectedRowKeys.value = keys.map(Number)
 }
 
 async function handleReindex(record: KnowledgeDocumentVO) {
@@ -253,7 +285,9 @@ onMounted(() => {
         <a-upload :before-upload="beforeUpload" :max-count="1" :show-upload-list="true">
           <a-button>选择 .txt / .md / .docx 文件</a-button>
         </a-upload>
-        <a-button type="primary" :loading="uploading" @click="handleUpload">上传并建立索引</a-button>
+        <a-button type="primary" :loading="uploading" :disabled="uploading" @click="handleUpload">
+          上传并建立索引
+        </a-button>
       </a-space>
     </a-card>
 
@@ -280,6 +314,19 @@ onMounted(() => {
           <a-select-option value="failed">失败</a-select-option>
         </a-select>
         <a-button @click="handleTitleSearch">查询</a-button>
+        <a-popconfirm
+          :title="`确定删除选中的 ${selectedRowKeys.length} 个文档及向量索引？`"
+          :disabled="selectedRowKeys.length === 0"
+          @confirm="handleBatchDelete"
+        >
+          <a-button
+            danger
+            :disabled="selectedRowKeys.length === 0"
+            :loading="batchDeleting"
+          >
+            批量删除{{ selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : '' }}
+          </a-button>
+        </a-popconfirm>
       </a-space>
     </div>
 
@@ -289,6 +336,10 @@ onMounted(() => {
       :columns="columns"
       :data-source="dataSource"
       :loading="loading"
+      :row-selection="{
+        selectedRowKeys,
+        onChange: handleRowSelectionChange,
+      }"
       :pagination="{
         current: pagination.current,
         pageSize: pagination.pageSize,

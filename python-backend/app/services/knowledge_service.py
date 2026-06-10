@@ -14,6 +14,7 @@ from app.schemas.knowledge import (
     KnowledgeSearchByStatusRequest,
     KnowledgeSearchByTitleRequest,
     KnowledgeStatsVO,
+    KnowledgeBatchDeleteRequest,
 )
 from app.services.knowledge_ingest_service import KnowledgeIngestService
 from app.managers.chroma_manager import chroma_manager
@@ -53,22 +54,29 @@ class KnowledgeService:
         throw_if(len(file_bytes) == 0, ErrorCode.PARAMS_ERROR, "文件内容为空")
         throw_if(len(file_bytes) > 5 * 1024 * 1024, ErrorCode.PARAMS_ERROR, "文件大小不能超过 5MB")
 
-        await self.db.execute(
-            """
-            INSERT INTO knowledge_document
-                (title, fileName, fileType, fileSize, status, chunkCount, createdBy)
-            VALUES
-                (:title, :fileName, :fileType, :fileSize, 'processing', 0, :createdBy)
-            """,
-            {
-                "title": title.strip() or file_name,
-                "fileName": file_name,
-                "fileType": ext,
-                "fileSize": len(file_bytes),
-                "createdBy": admin_user_id,
-            },
-        )
-        doc_id = int(await self.db.fetch_val("SELECT LAST_INSERT_ID() AS id"))
+        insert_values = {
+            "title": title.strip() or file_name,
+            "fileName": file_name,
+            "fileType": ext,
+            "fileSize": len(file_bytes),
+            "createdBy": admin_user_id,
+        }
+        # 必须在同一连接上取 lastrowid，避免连接池导致 LAST_INSERT_ID 错乱
+        async with self.db.connection() as conn:
+            doc_id = int(
+                await conn.execute(
+                    """
+                    INSERT INTO knowledge_document
+                        (title, fileName, fileType, fileSize, status, chunkCount, createdBy)
+                    VALUES
+                        (:title, :fileName, :fileType, :fileSize, 'processing', 0, :createdBy)
+                    """,
+                    insert_values,
+                )
+            )
+
+        throw_if(doc_id <= 0, ErrorCode.SYSTEM_ERROR, "文档 ID 获取失败")
+        logger.info("知识库文档已创建, documentId=%s, fileName=%s", doc_id, file_name)
 
         try:
             await self.ingest_service.ingest_file(
@@ -89,8 +97,18 @@ class KnowledgeService:
             )
             throw_if(True, ErrorCode.OPERATION_ERROR, f"文档索引失败: {exc}")
 
-        doc = await self.get_by_id(int(doc_id))
-        throw_if_not(doc, ErrorCode.SYSTEM_ERROR, "文档创建后查询失败")
+        doc = await self.get_by_id(doc_id)
+        if not doc:
+            logger.error("文档创建后查询失败, documentId=%s", doc_id)
+            await self.db.execute(
+                """
+                UPDATE knowledge_document
+                SET status = 'failed', errorMessage = :errorMessage, updateTime = NOW()
+                WHERE id = :id
+                """,
+                {"id": doc_id, "errorMessage": "文档创建后查询失败"},
+            )
+            throw_if(True, ErrorCode.SYSTEM_ERROR, "文档创建后查询失败")
         return doc
 
     async def list_by_page(
@@ -241,6 +259,15 @@ class KnowledgeService:
             )
             for item in raw_chunks
         ]
+
+    async def batch_delete_documents(self, request: KnowledgeBatchDeleteRequest) -> bool:
+        """批量删除知识库文档"""
+        throw_if(not request.ids, ErrorCode.PARAMS_ERROR, "文档 ID 列表不能为空")
+        throw_if(len(request.ids) > 100, ErrorCode.PARAMS_ERROR, "一次最多删除 100 个文档")
+
+        for document_id in request.ids:
+            await self.delete_document(document_id)
+        return True
 
     async def delete_document(self, document_id: int) -> bool:
         row = await self.db.fetch_one(
