@@ -66,14 +66,54 @@ class ArticleAgentOrchestrator:
         stream_handler,
     ):
         stream_context = StreamHandlerContext(stream_handler)
-        logger.info("阶段3：开始生成正文, taskId=%s", state.task_id)
-        await self.content_agent.run(service, state, stream_context.emit)
-        stream_context.emit(SseMessageTypeEnum.AGENT3_COMPLETE.value)
+        max_retries = max(0, settings.agent_content_review_max_retries)
 
-        if settings.agent_reviewer_enabled:
-            logger.info("阶段3：开始审核正文, taskId=%s", state.task_id)
+        for attempt in range(max_retries + 1):
+            state.content_rewrite_attempt = attempt
+            logger.info(
+                "阶段3：开始生成正文, taskId=%s, rewriteAttempt=%s",
+                state.task_id,
+                attempt,
+            )
+            await self.content_agent.run(service, state, stream_context.emit)
+            stream_context.emit(SseMessageTypeEnum.AGENT3_COMPLETE.value)
+
+            if not settings.agent_reviewer_enabled:
+                break
+
+            # 最后一轮才允许 Reviewer 直接用 revisedContent 替换；前面几轮留给 Agent3 重写
+            state.apply_reviewer_revision = attempt >= max_retries
+            logger.info(
+                "阶段3：开始审核正文, taskId=%s, rewriteAttempt=%s",
+                state.task_id,
+                attempt,
+            )
             await self.reviewer_agent.run(service, state)
             stream_context.emit(SseMessageTypeEnum.AGENT_REVIEWER_COMPLETE.value)
+
+            if service.is_content_review_acceptable(state):
+                logger.info(
+                    "Reviewer 通过, taskId=%s, score=%s, rewriteAttempt=%s",
+                    state.task_id,
+                    state.review_score,
+                    attempt,
+                )
+                break
+
+            if attempt >= max_retries:
+                logger.warning(
+                    "Reviewer 未达标且已达最大重写次数, taskId=%s, score=%s",
+                    state.task_id,
+                    state.review_score,
+                )
+                break
+
+            logger.info(
+                "Reviewer 未达标，准备重跑 Agent3, taskId=%s, score=%s, issues=%s",
+                state.task_id,
+                state.review_score,
+                (state.review_issues or [])[:3],
+            )
 
         logger.info("阶段3：开始分析配图需求, taskId=%s", state.task_id)
         await self.image_analyzer_agent.run(service, state)

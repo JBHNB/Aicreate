@@ -59,6 +59,18 @@ export interface ArticleQueryRequest {
   taskId?: string
 }
 
+export interface RetrievalSource {
+  documentId: number
+  title: string
+  chunkIndex: number
+  score: number
+}
+
+export interface Agent3InputData {
+  retrievalHitCount?: number
+  retrievalSources?: RetrievalSource[]
+}
+
 export interface AgentLogVO {
   id: number
   taskId: string
@@ -68,6 +80,8 @@ export interface AgentLogVO {
   durationMs?: number
   status: string
   errorMessage?: string
+  inputData?: string
+  outputData?: string
   createTime: string
 }
 

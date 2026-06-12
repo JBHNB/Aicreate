@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -8,6 +8,7 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   DownloadOutlined,
+  DatabaseOutlined,
   FileTextOutlined,
   LoadingOutlined,
   OrderedListOutlined,
@@ -18,7 +19,7 @@ import dayjs from 'dayjs'
 
 import { getArticle, getExecutionLogs } from '@/api/article'
 import { AGENT_DISPLAY_NAME_MAP } from '@/constants/article'
-import type { AgentExecutionStats, ArticleVO } from '@/types/article'
+import type { Agent3InputData, AgentExecutionStats, ArticleVO } from '@/types/article'
 import {
   exportArticleVo,
   getStatusTagColor,
@@ -95,6 +96,18 @@ const renderedContent = () => {
   return markdownToHtml(md)
 }
 
+const agent3Rag = computed(() => {
+  const log = executionStats.value?.logs?.find(
+    (item) => item.agentName === 'agent3_generate_content',
+  )
+  if (!log?.inputData) return null
+  try {
+    return JSON.parse(log.inputData) as Agent3InputData
+  } catch {
+    return null
+  }
+})
+
 onMounted(() => {
   void loadArticle()
 })
@@ -152,6 +165,33 @@ onMounted(() => {
         </div>
 
         <a-divider />
+
+        <div v-if="agent3Rag !== null" class="rag-section">
+          <h2><DatabaseOutlined /> 参考资料命中（RAG）</h2>
+          <a-alert
+            v-if="(agent3Rag.retrievalHitCount ?? 0) === 0"
+            type="warning"
+            show-icon
+            message="未命中系统知识库"
+            description="Agent3 生成正文时未检索到相关资料，内容完全由模型根据选题与大纲生成。"
+          />
+          <template v-else>
+            <p class="rag-summary">
+              共命中 <strong>{{ agent3Rag.retrievalHitCount }}</strong> 条片段，已注入 Agent3 写作 Prompt
+            </p>
+            <div
+              v-for="(source, index) in agent3Rag.retrievalSources"
+              :key="`${source.documentId}-${source.chunkIndex}-${index}`"
+              class="rag-item"
+            >
+              <div class="rag-item-title">{{ source.title }}</div>
+              <div class="rag-item-meta">
+                分块 #{{ source.chunkIndex + 1 }} · 相似度 {{ source.score.toFixed(2) }}
+              </div>
+            </div>
+          </template>
+          <a-divider />
+        </div>
 
         <div
           v-if="executionStats?.logs?.length"
@@ -318,9 +358,32 @@ onMounted(() => {
 }
 .content-section h2,
 .outline-section h2,
-.images-section h2 {
+.images-section h2,
+.rag-section h2 {
   font-size: 16px;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rag-summary {
+  margin: 0 0 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+.rag-item {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
+}
+.rag-item-title {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.rag-item-meta {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
 }
 .images-grid {
   display: grid;

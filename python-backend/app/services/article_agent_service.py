@@ -200,6 +200,12 @@ class ArticleAgentService:
             .replace("{outline}", outline_text)
             .replace("{referenceSection}", reference_section)
         )
+        if state.review_issues:
+            issues_text = "\n".join(f"- {item}" for item in state.review_issues[:5])
+            prompt += (
+                "\n\n上次审核未通过，请在本次重写中改进以下问题：\n"
+                f"{issues_text}\n"
+            )
         prompt += self._get_style_prompt(state.style)  # 第 5 期新增：风格 Prompt
 
         async with self._agent_log_context(
@@ -212,6 +218,8 @@ class ArticleAgentService:
                 "outlineSections": len(state.outline.sections) if state.outline else 0,
                 "retrievalHitCount": retrieval_hit_count,
                 "retrievalSources": retrieval_sources_log,
+                "rewriteAttempt": state.content_rewrite_attempt,
+                "hasReviewFeedback": bool(state.review_issues),
             },
         ) as log_data:
             content = await self._call_llm_with_streaming(
@@ -224,8 +232,18 @@ class ArticleAgentService:
             log_data["outputData"] = self._safe_json_dumps({"contentLength": len(content)})
             logger.info(f"智能体3：正文生成成功, length={len(content)}")
 
-    async def agent_reviewer_review_content(self, state: ArticleState):
-        """审核智能体：评分；未达标时用 revisedContent 替换正文（仅一次）。"""
+    def is_content_review_acceptable(self, state: ArticleState) -> bool:
+        """Reviewer 是否认为正文可进入配图环节"""
+        threshold = settings.agent_reviewer_pass_score
+        return bool(state.review_passed) or int(state.review_score or 0) >= threshold
+
+    async def agent_reviewer_review_content(
+        self,
+        state: ArticleState,
+        *,
+        apply_revised_content: bool = True,
+    ):
+        """审核智能体：评分；未达标时可选 revisedContent 替换正文。"""
         if not state.content or not state.content.strip():
             logger.warning("Reviewer 跳过：正文为空")
             return
@@ -263,12 +281,13 @@ class ArticleAgentService:
 
             state.review_passed = passed
             state.review_score = score
+            state.review_issues = issues if isinstance(issues, list) else []
 
             threshold = settings.agent_reviewer_pass_score
             ok = passed or score >= threshold
             need_rewrite = not ok and bool(revised)
 
-            if need_rewrite:
+            if need_rewrite and apply_revised_content:
                 logger.info(
                     "Reviewer 未达标(score=%s, passed=%s)，已用优化稿替换正文, issues=%s",
                     score,
@@ -276,6 +295,12 @@ class ArticleAgentService:
                     issues[:3] if isinstance(issues, list) else issues,
                 )
                 state.content = revised
+            elif not ok and not apply_revised_content:
+                logger.info(
+                    "Reviewer 未达标(score=%s)，保留原稿等待 Agent3 重写, issues=%s",
+                    score,
+                    state.review_issues[:3] if state.review_issues else [],
+                )
             elif not ok:
                 logger.warning(
                     "Reviewer 未达标但未返回 revisedContent，保留原稿, score=%s",
@@ -288,8 +313,9 @@ class ArticleAgentService:
                 {
                     "passed": passed,
                     "score": score,
-                    "rewritten": need_rewrite and bool(revised),
-                    "issuesCount": len(issues) if isinstance(issues, list) else 0,
+                    "rewritten": need_rewrite and bool(revised) and apply_revised_content,
+                    "issuesCount": len(state.review_issues or []),
+                    "applyRevisedContent": apply_revised_content,
                 }
             )
 

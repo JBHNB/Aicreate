@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     # Reviewer：正文后审核，低于 pass_score 且未 passed 时用 revisedContent 替换
     agent_reviewer_enabled: bool = True
     agent_reviewer_pass_score: int = 75
+    # Reviewer 未达标时，最多额外重跑 Agent3 的次数（0=不重跑，1=最多再写一遍）
+    agent_content_review_max_retries: int = 1
 
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""
